@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "incorporeal_2",
+  "version": "${version}",
+
+  "name": "Incorporeal 2",
+  "description": "Botania addon",
+  "authors": [
+    "quaternary"
+  ],
+
+  "license": "LGPL-3.0-or-later",
+  "icon": "assets/incorporeal_2/icon.png",
+
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "agency.highlysuspect.incorporeal2.Init"
+    ],
+		"client": [
+			"agency.highlysuspect.incorporeal2.client.ClientInit"
+		]
+  },
+  "mixins": [
+    "incorporeal2.mixins.json"
+  ],
+
+  "depends": {
+    "fabricloader": ">=0.7.4",
+    "fabric": "*",
+    "minecraft": "1.16.4"
+  },
+  "suggests": {
+    "flamingo": "*"
+  }
+}

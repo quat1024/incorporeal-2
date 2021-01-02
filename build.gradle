@@ -1,0 +1,112 @@
+plugins {
+	id "fabric-loom" version "0.5-SNAPSHOT"
+	id "maven-publish"
+}
+
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
+
+archivesBaseName = "${project.archives_base_name}-${project.minecraft_version}"
+version = project.mod_version
+group = project.maven_group
+
+repositories {
+	maven {
+		url "https://maven.blamejared.com/"
+	}
+	
+	maven {
+		url "https://mod-buildcraft.com/maven"
+	}
+	
+	maven {
+		url "https://maven.theillusivec4.top/"
+	}
+	
+	maven {
+		url "https://dl.bintray.com/ladysnake/libs"
+	}
+	
+	maven {
+		url "https://maven.jamieswhiteshirt.com/libs-release/"
+	}
+}
+
+dependencies {
+	//to change the versions see the gradle.properties file
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+	
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+	// Fabric API. This is technically optional, but you probably want it anyway.
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+	
+	//Botania
+	modCompile "vazkii.botania:Botania:1.16.4-411-FABRIC-20201231.034319-6"
+	
+	//Botania's deps, yoinked straight from its build.gradle
+	modImplementation "vazkii.patchouli:Patchouli:1.16.4-48-FABRIC"
+	modCompile "alexiil.mc.lib:libblockattributes-all:0.8.4"
+	modImplementation "me.zeroeightsix:fiber:0.23.0-2"
+	modImplementation "io.github.onyxstudios.Cardinal-Components-API:cardinal-components-base:2.7.2"
+	modImplementation "io.github.onyxstudios.Cardinal-Components-API:cardinal-components-block:2.7.2"
+	modImplementation "io.github.onyxstudios.Cardinal-Components-API:cardinal-components-entity:2.7.2"
+	modImplementation "io.github.onyxstudios.Cardinal-Components-API:cardinal-components-util:2.7.2"
+	compileOnly "com.demonwav.mcdev:annotations:1.0"
+	modImplementation "top.theillusivec4.curios:curios-fabric:0.0.10-1.16.3"
+	modImplementation "com.jamieswhiteshirt:reach-entity-attributes:1.0.1"
+}
+
+processResources {
+	inputs.property "version", project.version
+
+	from(sourceSets.main.resources.srcDirs) {
+		include "fabric.mod.json"
+		expand "version": project.version
+	}
+
+	from(sourceSets.main.resources.srcDirs) {
+		exclude "fabric.mod.json"
+	}
+}
+
+// ensure that the encoding is set to UTF-8, no matter what the system default is
+// this fixes some edge cases with special characters not displaying correctly
+// see http://yodaconditions.net/blog/fix-for-java-file-encoding-problems-with-gradle.html
+tasks.withType(JavaCompile) {
+	options.encoding = "UTF-8"
+}
+
+// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
+// if it is present.
+// If you remove this task, sources will not be generated.
+task sourcesJar(type: Jar, dependsOn: classes) {
+	classifier = "sources"
+	from sourceSets.main.allSource
+}
+
+jar {
+	from "LICENSE"
+}
+
+// configure the maven publication
+publishing {
+	publications {
+		mavenJava(MavenPublication) {
+			// add all the jars that should be included when publishing to maven
+			artifact(remapJar) {
+				builtBy remapJar
+			}
+			artifact(sourcesJar) {
+				builtBy remapSourcesJar
+			}
+		}
+	}
+
+	// select the repositories you want to publish to
+	repositories {
+		// uncomment to publish to the local maven
+		// mavenLocal()
+	}
+}
