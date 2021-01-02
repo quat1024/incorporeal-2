@@ -1,6 +1,8 @@
 package agency.highlysuspect.incorporeal2;
 
-import agency.highlysuspect.incorporeal2.flower.IncorporeticFlowers;
+import agency.highlysuspect.incorporeal2.block.IncorporeticBlocks;
+import agency.highlysuspect.incorporeal2.block.entity.IncorporeticBlockEntityTypes;
+import agency.highlysuspect.incorporeal2.item.IncorporeticItems;
 import agency.highlysuspect.incorporeal2.net.IncorporeticNetCommon;
 import net.fabricmc.api.ModInitializer;
 import net.minecraft.util.Identifier;
@@ -17,7 +19,10 @@ public class Init implements ModInitializer {
 	
 	@Override
 	public void onInitialize() {
-		IncorporeticFlowers.onInitialize();
+		IncorporeticBlocks.onInitialize();
+		IncorporeticBlockEntityTypes.onInitialize();
+		
+		IncorporeticItems.onInitialize();
 		
 		IncorporeticNetCommon.onInitialize();
 	}

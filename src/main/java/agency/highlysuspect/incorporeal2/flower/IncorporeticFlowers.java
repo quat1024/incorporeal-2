@@ -1,15 +1,12 @@
 package agency.highlysuspect.incorporeal2.flower;
 
 import agency.highlysuspect.incorporeal2.Init;
-import net.fabricmc.fabric.api.client.itemgroup.FabricItemGroupBuilder;
+import agency.highlysuspect.incorporeal2.item.IncorporeticItems;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.entity.effect.StatusEffect;
 import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemGroup;
-import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.registry.Registry;
 import vazkii.botania.api.subtile.TileEntitySpecialFlower;
@@ -18,16 +15,14 @@ import vazkii.botania.common.block.BlockSpecialFlower;
 import vazkii.botania.common.block.ModBlocks;
 import vazkii.botania.common.item.block.ItemBlockSpecialFlower;
 
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class IncorporeticFlowers {
 	public static final FlowerCollection<SubTileFunny> FUNNY = new FlowerCollection<>("funny", StatusEffects.UNLUCK, 1200, SubTileFunny::kingSize, SubTileFunny::funSize);
 	
-	public static ItemGroup GROUP = FabricItemGroupBuilder.build(Init.id("group"), () -> new ItemStack(FUNNY.regular.asItem()));
-	public static Item.Settings ITEM_SETTINGS = new Item.Settings().group(GROUP);
-	
-	public static void onInitialize() {
-		FUNNY.register();
+	public static void forEach(Consumer<FlowerCollection<?>> action) {
+		action.accept(FUNNY);
 	}
 	
 	private static class BlockSpecialFlower2 extends BlockSpecialFlower {
@@ -50,6 +45,11 @@ public class IncorporeticFlowers {
 			this.regularFloating = new BlockFloatingSpecialFlower(FLOATING_PROPS, kingSize);
 			this.chibiFloating = new BlockFloatingSpecialFlower(FLOATING_PROPS, funSize);
 			
+			this.regularId = Init.id(name);
+			this.regularFloatingId = Init.id("floating_" + name);
+			this.chibiId = Init.id(name + "_chibi");
+			this.chibiFloatingId = Init.id("floating_" + name + "_chibi");
+			
 			this.kingSizeType = BlockEntityType.Builder.create(kingSize, regular, regularFloating).build(null);
 			this.funSizeType = BlockEntityType.Builder.create(funSize, chibi, chibiFloating).build(null);
 		}
@@ -61,25 +61,29 @@ public class IncorporeticFlowers {
 		public final BlockFloatingSpecialFlower regularFloating;
 		public final BlockFloatingSpecialFlower chibiFloating;
 		
+		public final Identifier regularId;
+		public final Identifier regularFloatingId;
+		public final Identifier chibiId;
+		public final Identifier chibiFloatingId;
+		
 		public final BlockEntityType<T> kingSizeType;
 		public final BlockEntityType<T> funSizeType;
 		
-		public void register() {
-			Identifier regularId = Init.id(name);
-			Identifier regularFloatingId = Init.id("floating_" + name);
-			Identifier chibiId = Init.id(name + "_chibi");
-			Identifier chibiFloatingId = Init.id("floating_" + name + "_chibi");
-			
+		public void registerBlocks() {
 			Registry.register(Registry.BLOCK, regularId, regular);
 			Registry.register(Registry.BLOCK, regularFloatingId, regularFloating);
 			Registry.register(Registry.BLOCK, chibiId, chibi);
 			Registry.register(Registry.BLOCK, chibiFloatingId, chibiFloating);
-			
-			Registry.register(Registry.ITEM, regularId, new ItemBlockSpecialFlower(regular, ITEM_SETTINGS));
-			Registry.register(Registry.ITEM, regularFloatingId, new ItemBlockSpecialFlower(regularFloating, ITEM_SETTINGS));
-			Registry.register(Registry.ITEM, chibiId, new ItemBlockSpecialFlower(chibi, ITEM_SETTINGS));
-			Registry.register(Registry.ITEM, chibiFloatingId, new ItemBlockSpecialFlower(chibiFloating, ITEM_SETTINGS));
-			
+		}
+		
+		public void registerItems() {
+			Registry.register(Registry.ITEM, regularId, new ItemBlockSpecialFlower(regular, IncorporeticItems.ITEM_SETTINGS));
+			Registry.register(Registry.ITEM, regularFloatingId, new ItemBlockSpecialFlower(regularFloating, IncorporeticItems.ITEM_SETTINGS));
+			Registry.register(Registry.ITEM, chibiId, new ItemBlockSpecialFlower(chibi, IncorporeticItems.ITEM_SETTINGS));
+			Registry.register(Registry.ITEM, chibiFloatingId, new ItemBlockSpecialFlower(chibiFloating, IncorporeticItems.ITEM_SETTINGS));
+		}
+		
+		public void registerBlockEntityTypes() {
 			Registry.register(Registry.BLOCK_ENTITY_TYPE, regularId, kingSizeType);
 			Registry.register(Registry.BLOCK_ENTITY_TYPE, chibiId, funSizeType);
 		}
