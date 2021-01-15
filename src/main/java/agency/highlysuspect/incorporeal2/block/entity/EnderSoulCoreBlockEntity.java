@@ -1,218 +1,156 @@
 package agency.highlysuspect.incorporeal2.block.entity;
 
+import alexiil.mc.lib.attributes.AttributeList;
+import alexiil.mc.lib.attributes.AttributeProviderBlockEntity;
+import alexiil.mc.lib.attributes.Simulation;
+import alexiil.mc.lib.attributes.item.FixedItemInv;
+import alexiil.mc.lib.attributes.item.compat.FixedInventoryVanillaWrapper;
+import alexiil.mc.lib.attributes.item.filter.ConstantItemFilter;
+import alexiil.mc.lib.attributes.item.filter.ItemFilter;
+import alexiil.mc.lib.attributes.item.impl.DelegatingFixedItemInv;
+import alexiil.mc.lib.attributes.item.impl.EmptyFixedItemInv;
+import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.inventory.EnderChestInventory;
-import net.minecraft.inventory.SidedInventory;
 import net.minecraft.item.ItemStack;
-import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Tickable;
-import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+import vazkii.botania.api.corporea.*;
+import vazkii.botania.common.impl.corporea.AbstractCorporeaNode;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
-import java.util.stream.IntStream;
 
-public class EnderSoulCoreBlockEntity extends SoulCoreBlockEntity implements SidedInventory, Tickable {
+public class EnderSoulCoreBlockEntity extends SoulCoreBlockEntity implements AttributeProviderBlockEntity, FixedItemInv {
 	public EnderSoulCoreBlockEntity() {
 		super(IncorporeticBlockEntityTypes.ENDER_SOUL_CORE_TYPE);
 	}
 	
-	private SidedInventory inv = DummySidedInventory.INSTANCE;
+	@Override
+	public int getMaxMana() {
+		return 5000;
+	}
+	
+	private final FixedItemInv inv = new ManaDrainingWrapperInv(this);
 	
 	@Override
-	public void tick() {
-		if(world == null || world.isClient()) return;
-		
-		Optional<ServerPlayerEntity> opPlayer = findPlayerEntity();
-		if(opPlayer.isPresent()) {
-			inv = new EnderChestSidedInventoryWrapper(opPlayer.get().getEnderChestInventory());
-		} else {
-			inv = DummySidedInventory.INSTANCE;
+	public void addAllAttributes(AttributeList<?> list) {
+		list.offer(inv);
+	}
+	
+	public static final class NodeDetector implements ICorporeaNodeDetector {
+		@Override
+		public ICorporeaNode getNode(World world, ICorporeaSpark spark) {
+			BlockEntity be = world.getBlockEntity(spark.getAttachPos());
+			if(be instanceof EnderSoulCoreBlockEntity) {
+				return ((EnderSoulCoreBlockEntity) be).new CorporeaNode(world, spark.getAttachPos(), spark);
+			} else return null;
 		}
 	}
 	
-	@Override
-	public int[] getAvailableSlots(Direction side) {return inv.getAvailableSlots(side);}
-	
-	@Override
-	public boolean canInsert(int slot, ItemStack stack, Direction dir) {return inv.canInsert(slot, stack, dir);}
-	
-	@Override
-	public boolean canExtract(int slot, ItemStack stack, Direction dir) {return inv.canExtract(slot, stack, dir);}
-	
-	@Override
-	public int size() {return inv.size();}
-	
-	@Override
-	public boolean isEmpty() {return inv.isEmpty();}
-	
-	@Override
-	public ItemStack getStack(int slot) {return inv.getStack(slot);}
-	
-	@Override
-	public ItemStack removeStack(int slot, int amount) {return inv.removeStack(slot, amount);}
-	
-	@Override
-	public ItemStack removeStack(int slot) {return inv.removeStack(slot);}
-	
-	@Override
-	public void setStack(int slot, ItemStack stack) {inv.setStack(slot, stack);}
-	
-	@Override
-	public int getMaxCountPerStack() {return inv.getMaxCountPerStack();}
-	
-	@Override
-	public void markDirty() {inv.markDirty();}
-	
-	@Override
-	public boolean canPlayerUse(PlayerEntity player) {return inv.canPlayerUse(player);}
-	
-	@Override
-	public void clear() {inv.clear();}
-	
-	//MASSIVE TODO: This inventory does not cost any mana!!!!! I need to implement the mana drain effect!!!!!
-	//         This is hard without forge inventory stuff. I might have to rely on LBA invs or something
-	//         Mainly because it's not very easy to tell when an item gets inserted or removed for real (especially insertion)
-	
-	public static class EnderChestSidedInventoryWrapper implements SidedInventory {
-		public EnderChestSidedInventoryWrapper(EnderChestInventory wrapped) {
-			this.wrapped = wrapped;
+	//non-static inner class
+	public class CorporeaNode extends AbstractCorporeaNode {
+		public CorporeaNode(World world, BlockPos pos, ICorporeaSpark spark) {
+			super(world, pos, spark);
+		}
+		
+		@Override
+		public List<ItemStack> countItems(ICorporeaRequest request) {
+			return doIt(request, Simulation.SIMULATE);
+		}
+		
+		@Override
+		public List<ItemStack> extractItems(ICorporeaRequest request) {
+			return doIt(request, Simulation.ACTION);
+		}
+		
+		private List<ItemStack> doIt(ICorporeaRequest request, Simulation sim) {
+			ArrayList<ItemStack> builder = new ArrayList<>();
 			
-			//in the INCREDIBLY unlikely case that someone made a mod to change the size of the ender chest inventory or something lmao
-			if(wrapped.size() != size) {
-				size = wrapped.size();
-				availableSlots = IntStream.range(0, size).toArray();
+			//TODO: This is a lazy copy of botania's VanillaCorporeaNode, fudged a bit to handle LBA inventories (see extractstack)
+			// There is probably a prettier way to do this
+			for (int i = inv.getSlotCount() - 1; i >= 0; i--) {
+				ItemStack stackAt = inv.getInvStack(i);
+				if (request.getMatcher().test(stackAt)) {
+					request.trackFound(stackAt.getCount());
+					
+					int rem = Math.min(stackAt.getCount(), request.getStillNeeded() == -1 ? stackAt.getCount() : request.getStillNeeded());
+					if (rem > 0) {
+						request.trackSatisfied(rem);
+						
+						if (sim.isAction()) {
+							ItemStack copy = stackAt.copy();
+							builder.addAll(breakDownBigStack(inv.extractStack(i, ConstantItemFilter.ANYTHING, ItemStack.EMPTY, rem, Simulation.ACTION)));
+							getSpark().onItemExtracted(copy);
+							request.trackExtracted(rem);
+						} else {
+							ItemStack copy = stackAt.copy();
+							copy.setCount(rem);
+							builder.add(copy);
+						}
+					}
+				}
 			}
-		}
-		
-		private final EnderChestInventory wrapped;
-		private static int size = 27;
-		private static int[] availableSlots = IntStream.range(0, 27).toArray();
-		
-		@Override
-		public int[] getAvailableSlots(Direction side) {
-			return availableSlots;
-		}
-		
-		@Override
-		public boolean canInsert(int slot, ItemStack stack, Direction dir) {
-			return true;
-		}
-		
-		@Override
-		public boolean canExtract(int slot, ItemStack stack, Direction dir) {
-			return true;
-		}
-		
-		@Override
-		public int size() {
-			return size;
-		}
-		
-		@Override
-		public boolean isEmpty() {
-			return wrapped.isEmpty();
-		}
-		
-		@Override
-		public ItemStack getStack(int slot) {
-			return wrapped.getStack(slot);
-		}
-		
-		@Override
-		public ItemStack removeStack(int slot, int amount) {
-			return wrapped.removeStack(slot, amount);
-		}
-		
-		@Override
-		public ItemStack removeStack(int slot) {
-			return wrapped.removeStack(slot);
-		}
-		
-		@Override
-		public void setStack(int slot, ItemStack stack) {
-			wrapped.setStack(slot, stack);
-			markDirty();
-		}
-		
-		@Override
-		public void markDirty() {
-			wrapped.markDirty();
-		}
-		
-		@Override
-		public boolean canPlayerUse(PlayerEntity player) {
-			return false;
-		}
-		
-		@Override
-		public void clear() {
-			wrapped.clear(); //probably a bad idea...!
+			
+			return builder;
 		}
 	}
 	
-	public static class DummySidedInventory implements SidedInventory {
-		private DummySidedInventory() {}
-		
-		public static final DummySidedInventory INSTANCE = new DummySidedInventory();
-		
-		@Override
-		public int[] getAvailableSlots(Direction side) {
-			return new int[0];
+	//non-static inner class
+	public class ManaDrainingWrapperInv extends DelegatingFixedItemInv {
+		public ManaDrainingWrapperInv(FixedItemInv delegate) {
+			super(delegate);
 		}
 		
 		@Override
-		public boolean canInsert(int slot, ItemStack stack, Direction dir) {
-			return false;
+		public ItemStack insertStack(int slot, ItemStack stack, Simulation simulation) {
+			if(simulation.isAction()) drainMana(stack.getCount() * 5);
+			return super.insertStack(slot, stack, simulation);
 		}
 		
 		@Override
-		public boolean canExtract(int slot, ItemStack stack, Direction dir) {
-			return false;
+		public ItemStack extractStack(int slot, ItemFilter filter, ItemStack mergeWith, int maxCount, Simulation simulation) {
+			maxCount = Math.min(maxCount, (getMana() / 5) + 1);
+			
+			ItemStack result = super.extractStack(slot, filter, mergeWith, maxCount, simulation);
+			if(simulation.isAction()) drainMana(result.getCount() * 5);
+			return result;
 		}
-		
-		@Override
-		public int size() {
-			return 0;
-		}
-		
-		@Override
-		public boolean isEmpty() {
+	}
+	
+	private Optional<EnderChestInventory> findEchest() {
+		if(getMana() > 0)	return findPlayer().map(PlayerEntity::getEnderChestInventory);
+		else return Optional.empty();
+	}
+	
+	//FixedItemInv (this is where the partial delegation to the enderchest happens)
+	//I know about DelegatingFixedItemInv, but i might need to switch the underlying inventory when mana runs out/player logs out/whatever
+	
+	@Override
+	public ItemStack getInvStack(int slot) {
+		return findEchest().map(e -> e.getStack(slot)).orElse(ItemStack.EMPTY);
+	}
+	
+	@Override
+	public boolean isItemValidForSlot(int slot, ItemStack stack) {
+		return findPlayer().isPresent();
+	}
+	
+	@Override
+	public boolean setInvStack(int slot, ItemStack to, Simulation simulation) {
+		Optional<EnderChestInventory> echest = findEchest();
+		if(echest.isPresent()) {
+			if(simulation.isAction()) {
+				echest.get().setStack(slot, to);
+			}
 			return true;
-		}
-		
-		@Override
-		public ItemStack getStack(int slot) {
-			return ItemStack.EMPTY;
-		}
-		
-		@Override
-		public ItemStack removeStack(int slot, int amount) {
-			return ItemStack.EMPTY;
-		}
-		
-		@Override
-		public ItemStack removeStack(int slot) {
-			return ItemStack.EMPTY;
-		}
-		
-		@Override
-		public void setStack(int slot, ItemStack stack) {
-			//Nope
-		}
-		
-		@Override
-		public void markDirty() {
-			//Nope
-		}
-		
-		@Override
-		public boolean canPlayerUse(PlayerEntity player) {
-			return false;
-		}
-		
-		@Override
-		public void clear() {
-			//Nope
-		}
+		} else return false;
+	}
+	
+	@Override
+	public int getSlotCount() {
+		return 27;
 	}
 }
